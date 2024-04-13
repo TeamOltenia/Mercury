@@ -19,6 +19,8 @@ origins = [
     "http://localhost:3000",
 ]
 
+dummy_data = pd.read_csv(data_path)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -31,6 +33,20 @@ app.add_middleware(
 async def get_dummy_data(n: int = 100):
     dummy_data = pd.read_csv(data_path, nrows=n).to_dict(orient="records")
     return dummy_data
+
+
+@app.get("/data/{id}")
+async def get_data_by_id(id: str):  # Convert id to string
+    # Convert 'nameDest' column to string if necessary
+    dummy_data['nameDest'] = dummy_data['nameDest'].astype(str)
+
+    # Filter records
+    filtered_records = dummy_data[dummy_data['nameDest'] == id]
+
+    # Convert filtered records to dictionary
+    filtered_records_dict = filtered_records.to_dict(orient="records")
+
+    return filtered_records_dict
 
 @app.get("/send_email")
 async def send_email(to: str, subject: str, text: str):
@@ -59,3 +75,7 @@ async def send_email(to: str, subject: str, text: str):
                 status_code=response.status_code,
                 detail=f"Failed to send email. Mailjet API response: {response.text}",
             )
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)
