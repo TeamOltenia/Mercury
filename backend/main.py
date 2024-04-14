@@ -1,5 +1,3 @@
-import pickle
-
 import pandas as pd
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -19,6 +17,8 @@ origins = [
     "https://localhost.tiangolo.com",
     "http://localhost",
     "http://localhost:3000",
+    "http://localhost:3001",
+
 ]
 
 dummy_data = pd.read_csv(data_path)
