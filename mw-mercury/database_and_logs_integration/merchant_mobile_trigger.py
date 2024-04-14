@@ -1,22 +1,6 @@
-import asyncio
 import asyncpg
-from pydantic import BaseModel
 
 # Assuming previous classes and connection function
-
-class LogAfter(BaseModel):
-    cc_num: int
-    merchant: str
-    category: str
-    amt: float
-    first: str
-    last: str
-    street: str
-    city: str
-    state: str
-    zip: int
-    unix_time: int
-    is_fraud: bool
 
 async def connect_to_db():
     return await asyncpg.connect(
