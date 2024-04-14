@@ -1,6 +1,6 @@
-import asyncio
 import json
 import asyncpg
+import asyncio
 from pydantic import BaseModel
 
 class LogBefore(BaseModel):
@@ -30,24 +30,34 @@ class LogAfter(BaseModel):
     unix_time: int
     is_fraud: bool
 
-async def connect_to_db():
-    return await asyncpg.connect(
-        "postgresql://admin:HMPKCWVd4i5t@ep-holy-night-a2ln8lgi.eu-central-1.aws.neon.tech/Mercury?sslmode=require"
-    )
+async def connect_to_db(retry_attempts=5, retry_delay=2):
+    """Attempt to connect to the database with retries."""
+    last_exception = None
+    for attempt in range(retry_attempts):
+        try:
+            # Attempt to establish a database connection
+            return await asyncpg.connect(
+                "postgresql://admin:HMPKCWVd4i5t@ep-holy-night-a2ln8lgi.eu-central-1.aws.neon.tech/Mercury?sslmode=require"
+            )
+        except Exception as e:
+            last_exception = e
+            print(f"Failed to connect to the database, attempt {attempt + 1}/{retry_attempts}. Retrying in {retry_delay} seconds...")
+            await asyncio.sleep(retry_delay)
+    
+    # If all attempts fail, raise the last caught exception
+    raise Exception(f"All connection attempts failed: {last_exception}")
 
 async def insert_log_before(conn, log: LogBefore):
     await conn.execute('''
-        INSERT INTO Logs_Before (
-            cc_num, merchant, category, amt, first, last, street, city, state, zip, unix_time
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        INSERT INTO Logs_Before (cc_num, merchant, category, amt, first, last, street, city, state, zip, unix_time)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     ''', log.cc_num, log.merchant, log.category, log.amt, log.first, log.last,
     log.street, log.city, log.state, log.zip, log.unix_time)
 
 async def insert_log_after(conn, log: LogAfter):
     await conn.execute('''
-        INSERT INTO Logs_After (
-            cc_num, merchant, category, amt, first, last, street, city, state, zip, unix_time, is_fraud
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        INSERT INTO Logs_After (cc_num, merchant, category, amt, first, last, street, city, state, zip, unix_time, is_fraud)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     ''', log.cc_num, log.merchant, log.category, log.amt, log.first, log.last,
     log.street, log.city, log.state, log.zip, log.unix_time, log.is_fraud)
 
@@ -66,14 +76,22 @@ async def add_log(table_name, request_body):
     finally:
         await conn.close()
 
-async def lambda_handler(event, context):
+def lambda_handler(event, context):
+    loop = asyncio.get_event_loop()
     try:
+        event = json.loads(event.get('body', '{}'))
         table_name = event['table_name']
-        request_body = json.loads(event['request_body'])
-        response = await add_log(table_name, request_body)
-        return response
+        request_body = event['request_body']
+        response = loop.run_until_complete(add_log(table_name, request_body))
+        return {
+            'statusCode': 200,
+            'body': json.dumps(response)
+        }
     except Exception as e:
-        return {"error": str(e)}
+        return {
+            'statusCode': 500,
+            'body': json.dumps({"error": str(e)})
+        }
 
 
 # Mock data for testing
@@ -106,14 +124,11 @@ logs_after_mock = {
     "is_fraud": True
 }
 
-async def test():
-    # Testing inserting log before
-    print("Testing inserting log before...")
-    await lambda_handler({'table_name': 'Logs_Before', 'request_body': json.dumps(logs_before_mock)}, None)
+# async def test():
+#     # Testing inserting log before
+#     print("Testing inserting log before...")
+#     await lambda_handler({'table_name': 'Logs_Before', 'request_body': json.dumps(logs_before_mock)}, None)
 
-    # Testing inserting log after
-    print("Testing inserting log after...")
-    await lambda_handler({'table_name': 'Logs_After', 'request_body': json.dumps(logs_after_mock)}, None)
-
-# Run the test function
-asyncio.run(test())
+#     # Testing inserting log after
+#     print("Testing inserting log after...")
+#     await lambda_handler({'table_name': 'Logs_After', 'request_body': json.dumps(logs_after_mock)}, None)
